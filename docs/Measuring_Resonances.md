@@ -31,6 +31,17 @@ and **will not work**. The recommended connection scheme:
 | SDA | 19 | GPIO10 (SPI0_MOSI) |
 | SCL | 23 | GPIO11 (SPI0_SCLK) |
 
+An alternative to the ADXL345 is the MPU-9250 (or MPU-6050).  This accelerometer has been tested to work over I2C on the RPi at 400kbaud.
+Recommended connection scheme for I2C:
+
+| MPU-9250 pin | RPi pin | RPi pin name |
+|:--:|:--:|:--:|
+| 3V3 (or VCC) | 01 | 3.3v DC power |
+| GND | 09 | Ground |
+| SDA | 03 | GPIO02 (SDA1) |
+| SCL | 05 | GPIO03 (SCL1) |
+
+
 Fritzing wiring diagrams for some of the ADXL345 boards:
 
 ![ADXL345-Rpi](img/adxl345-fritzing.png)
@@ -87,7 +98,7 @@ Afterwards, check and follow the instructions in the
 Make sure the Linux SPI driver is enabled by running `sudo
 raspi-config` and enabling SPI under the "Interfacing options" menu.
 
-Add the following to the printer.cfg file (if not already there):
+For the ADXL345, add the following to the printer.cfg file:
 ```
 [mcu rpi]
 serial: /tmp/klipper_host_mcu
@@ -103,48 +114,52 @@ probe_points:
 It is advised to start with 1 probe point, in the middle of the print bed,
 slightly above it.
 
+For the MPU-9250:
+```
+[mcu rpi]
+serial: /tmp/klipper_host_mcu
+
+[mpu9250]
+i2c_mcu: rpi
+i2c_bus: i2c.1
+
+[resonance_tester]
+accel_chip: mpu9250
+probe_points:
+    100, 100, 20  # an example
+```
+
 Restart Klipper via the `RESTART` command.
 
 ## Measuring the resonances
 
 ### Checking the setup
 
-Now you can test a connection and calibrate the accelerometer. Home
-the printer, move the toolhead far away from the corners in X,Y plane
-(e.g. move it to the center of the print bed), and then:
+Now you can test a connection.
 
 - For "non bed-slingers" (e.g. one accelerometer), in Octoprint,
-  enter `ACCELEROMETER_CALIBRATE`
+  enter `ACCELEROMETER_QUERY`
 - For "bed-slingers" (e.g. more than one accelerometer), enter
-  `ACCELEROMETER_CALIBRATE CHIP=<chip>` where `<chip>` is the name of the chip
+  `ACCELEROMETER_QUERY CHIP=<chip>` where `<chip>` is the name of the chip
   as-entered, e.g. `CHIP=bed` (see: [bed-slinger](#bed-slinger-printers))
   for all installed accelerometer chips.
 
-This will run a basic calibration of the accelerometer and detect
-accelerometer orientation. It also runs some basic sanity checks
-and can detect some issues with the accelerometer or your setup
-(e.g. too noisy unbalanced fans).
+You should see the current measurements from the accelerometer, including the
+free-fall acceleration, e.g.
+```
+Recv: // adxl345 values (x, y, z): 470.719200, 941.438400, 9728.196800
+```
 
 If you get an error like `Invalid adxl345 id (got xx vs e5)`, where `xx`
 is some other ID, it is indicative of the connection problem with ADXL345,
 or the faulty sensor. Double-check the power, the wiring (that it matches
 the schematics, no wire is broken or loose, etc.), and soldering quality.
 
-Note that if the accelerometer is installed permenantly, or temporarily on
-a fixed location (e.g. into the fixed holes on the hotend), it is sufficient
-to run accelerometer calibration only one time for each board. In this case,
-you can save the calibration results by issuing `SAVE_CONFIG` command after
-the calibration is done. If it is mounted each time to a new location
-(e.g. glued onto the bed of the bed slinger printer), it may be helpful to add
-`autocalibrate` option to `[resonance_tester]` section, as
-```
-[resonance_tester]
-accel_chip: ...
-autocalibrate: True
-...
-```
-Then, Klipper will run a calibration test prior to each resonance testing
-automatically.
+Next, try running `MEASURE_AXES_NOISE` in Octoprint, you should get some
+baseline numbers for the noise of accelerometer on the axes (should be
+somewhere in the range of ~1-100). Too high axes noise (e.g. 1000 and more)
+can be indicative of the sensor issues, problems with its power, or too
+noisy imbalanced fans on a 3D printer.
 
 ### Measuring the resonances
 
