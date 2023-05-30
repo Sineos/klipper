@@ -1,3 +1,4 @@
+
 # PID
 
 PID control is a widely used control method in the 3D printing world.
@@ -5,7 +6,81 @@ It’s ubiquitous when it comes to temperature control, be it with heaters to
 generate or fans to remove heat. This document aims to provide a high-level
 overview of what PID is and how to use it best in Klipper.
 
-## History
+## PID Calibration
+### Preparing the Calibration
+When a calibration test is performed external influences should be minimized as
+much as possible:
+* Turn off fans
+* Turn off chamber heaters
+* Turn off the extruder heater when calibrating the bed and vice versa
+* Avoid external disturbances like drafts etc
+
+### Choosing the right PID Algorithm
+Klipper offers two different PID algorithms: Positional and Velocity
+
+* Positional (`pid`)
+    * The standard algorithm
+    * Very robust against noisy temperature readings
+    * Can cause overshoots
+    * Insufficient target control in edge cases
+* Velocity (`pid_v`)
+    * No overshoot
+    * Better target control in certain scenarios
+    * More susceptible to noisy sensors
+    * Might require larger smoothing time constants
+
+Refer to the [control statement](Config_Reference.md#extruder) in the
+Configuration Reference.
+
+### Running the PID Calibration
+The PID calibration is invoked via the [PID_CALIBRATE](G-Codes.html#pid_calibrate) command.
+This command will heat up the respective  heater and let it cool down around
+the target temperature in multiple cycles to determine the needed
+parameters.
+
+Such a calibration cycles looks like the following snippet:
+```
+3:12 PM   PID_CALIBRATE HEATER=extruder TARGET=220 TOLERANCE=0.01 WRITE_FILE=1
+3:15 PM   sample:1 pwm:1.0000 asymmetry:3.7519 tolerance:n/a
+3:15 PM   sample:2 pwm:0.6229 asymmetry:0.3348 tolerance:n/a
+3:16 PM   sample:3 pwm:0.5937 asymmetry:0.0840 tolerance:n/a
+3:17 PM   sample:4 pwm:0.5866 asymmetry:0.0169 tolerance:0.4134
+3:18 PM   sample:5 pwm:0.5852 asymmetry:0.0668 tolerance:0.0377
+3:18 PM   sample:6 pwm:0.5794 asymmetry:0.0168 tolerance:0.0142
+3:19 PM   sample:7 pwm:0.5780 asymmetry:-0.1169 tolerance:0.0086
+3:19 PM   PID parameters: pid_Kp=16.538 pid_Ki=0.801 pid_Kd=85.375
+               The SAVE_CONFIG command will update the printer config file
+               with these parameters and restart the printer.
+```
+Note the `asymmetry` information. It provides an indication if the heater's
+power is sufficient to ensure a symmetrical "heat up" versus "cool down /
+heat loss" behavior. It should start positive and converge to zero.
+A negative starting value indicates that the heat loss is faster than the heat
+up, this means the system is asymmetrical. The calibration will still be
+successful but reserves to counter disturbances might be low.
+
+## Advanced / Manual Calibration
+
+Many methods exist for calculating control parameters, such as Ziegler-Nichols,
+Cohen-Coon, Kappa-Tau, Lambda, and many more. By default, classical
+Ziegler-Nichols parameters are generated. If a user wants to experiment with
+other flavors of Ziegler-Nichols, or Cohen-Coon parameters, they can extract the
+constants from the log as seen below and enter them into this
+[spreadsheet](resources/pid_params.xls).
+
+```text
+Ziegler-Nichols constants: Ku=0.103092 Tu=41.800000
+Cohen-Coon constants: Km=-17.734845 Theta=6.600000 Tau=-10.182680
+```
+
+Classic Ziegler-Nichols parameters work in all scenarios. Cohen-Coon parameters
+work better with systems that have a large amount of dead time/delay. For
+example, if a printer has a bed with a large thermal mass that’s slow to heat
+up and stabilize, the Cohen-Coon parameters will generally do a better job at
+controlling it.
+
+## Further Readings
+### History
 
 The first rudimentary PID controller was developed by Elmer Sperry in 1911 to
 automate the control of a ship's rudder. Engineer Nicolas Minorsky published the
@@ -25,8 +100,7 @@ Friction Stir Welding", which laid out a method to generate more accurate
 results from a relay test. This is the PID calibration method currently used by
 Klipper.
 
-## PID Calibration
-
+### Details of the Relay Test
 As previously mentioned, Klipper uses a relay test for calibration purposes. A
 standard relay test is conceptually simple. You turn the heater’s power on and
 off to get it to oscillate about the target temperature, as seen in the
@@ -87,37 +161,7 @@ as a heater with power in reserve.
                with these parameters and restart the printer.
 ```
 
-A topic that’s not often discussed in the 3D printing community is the
-conditions in which calibration should be performed. When a calibration test is
-performed external variables should be minimized as much as possible, as the
-goal of the test is to model the system in a steady-state condition and free of
-external disturbances. For example, if you are calibrating a hot end, you do
-not want a bed or chamber heater actively heating up or cooling down. You want
-them off, or holding at their target temperature. Part cooling and chamber fans
-can also be problematic, as they can cause temperature fluctuations in the hot
-end.
-
-## Pid Control Parameters
-
-Many methods exist for calculating control parameters, such as Ziegler-Nichols,
-Cohen-Coon, Kappa-Tau, Lambda, and many more. By default, classical
-Ziegler-Nichols parameters are generated. If A user wants to experiment with
-other flavors of Ziegler-Nichols, or Cohen-Coon parameters, they can extract the
-constants from the log as seen below and enter them into this
-[spreadsheet](resources/pid_params.xls).
-
-```text
-Ziegler-Nichols constants: Ku=0.103092 Tu=41.800000
-Cohen-Coon constants: Km=-17.734845 Theta=6.600000 Tau=-10.182680
-```
-
-Classic Ziegler-Nichols parameters work in all scenarios. Cohen-Coon parameters
-work better with systems that have a large amount of dead time/delay. For
-example, if a printer has a bed with a large thermal mass that’s slow to heat
-up and stabilize, the Cohen-Coon parameters will generally do a better job at
-controlling it.
-
-## Pid Control Algorithms
+### Pid Control Algorithms
 
 Klipper currently supports two control algorithms: Positional and Velocity.
 The fundamental difference between the two algorithms is that the Positional

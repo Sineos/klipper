@@ -875,7 +875,7 @@ cycles. If the WRITE_FILE parameter is enabled, then the file
 /tmp/heattest.csv will be created with a log of all temperature samples
 taken during the test. TOLERANCE defaults to 0.02 if not passed in. The
 tighter the tolerance the better the calibration result will be, but how
-tight you can achieve depends on how clean your sensor readings are. low
+tight you can achieve depends on how clean your sensor readings are. Low
 noise readings might allow 0.01, to be used, while noisy reading might
 require a value of 0.03 or higher.
 
