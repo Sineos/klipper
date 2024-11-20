@@ -9,7 +9,6 @@
 #include "gpio.h" // i2c_setup
 #include "internal.h" // GPIO
 #include "sched.h" // sched_shutdown
-#include "i2ccmds.h" // I2C_BUS_SUCCESS
 
 struct i2c_info {
     I2C_TypeDef *i2c;
@@ -154,13 +153,6 @@ i2c_setup(uint32_t bus, uint32_t rate, uint8_t addr)
         uint32_t sclh = 32; // 32 * 125ns = 4us
         uint32_t sdadel = 4; // 4 * 125ns = 500ns
         uint32_t scldel = 10; // 10 * 125ns = 1250ns
-        // Clamp the rate to 400Khz
-        if (rate >= 400000) {
-            scll = 10; // 10 * 125ns = 1250ns
-            sclh = 4; // 4 * 125 = 500ns
-            sdadel = 3; // 3 * 125 = 375ns
-            scldel = 4; // 4 * 125 = 500ns
-        }
 
         uint32_t pclk = get_pclock_frequency((uint32_t)i2c);
         uint32_t presc = DIV_ROUND_UP(pclk, nom_i2c_clock);
@@ -175,57 +167,48 @@ i2c_setup(uint32_t bus, uint32_t rate, uint8_t addr)
     return (struct i2c_config){ .i2c=i2c, .addr=addr<<1 };
 }
 
-static int
+static uint32_t
 i2c_wait(I2C_TypeDef *i2c, uint32_t set, uint32_t timeout)
 {
     for (;;) {
         uint32_t isr = i2c->ISR;
         if (isr & set)
-            return I2C_BUS_SUCCESS;
+            return isr;
         if (isr & I2C_ISR_NACKF)
-            return I2C_BUS_NACK;
+            shutdown("I2C NACK error encountered");
         if (!timer_is_before(timer_read_time(), timeout))
-            return I2C_BUS_TIMEOUT;
+            shutdown("i2c timeout");
     }
 }
 
-int
+void
 i2c_write(struct i2c_config config, uint8_t write_len, uint8_t *write)
 {
     I2C_TypeDef *i2c = config.i2c;
     uint32_t timeout = timer_read_time() + timer_from_us(5000);
-    int ret = I2C_BUS_SUCCESS;
 
     // Send start and address
     i2c->CR2 = (I2C_CR2_START | config.addr | (write_len << I2C_CR2_NBYTES_Pos)
                 | I2C_CR2_AUTOEND);
     while (write_len--) {
-        ret = i2c_wait(i2c, I2C_ISR_TXIS, timeout);
-        if (ret != I2C_BUS_SUCCESS)
-            goto abrt;
+        i2c_wait(i2c, I2C_ISR_TXIS, timeout);
         i2c->TXDR = *write++;
     }
-    return i2c_wait(i2c, I2C_ISR_TXE, timeout);
-abrt:
-    i2c->CR2 |= I2C_CR2_STOP;
-    return ret;
+    i2c_wait(i2c, I2C_ISR_TXE, timeout);
 }
 
-int
+void
 i2c_read(struct i2c_config config, uint8_t reg_len, uint8_t *reg
          , uint8_t read_len, uint8_t *read)
 {
     I2C_TypeDef *i2c = config.i2c;
     uint32_t timeout = timer_read_time() + timer_from_us(5000);
-    int ret = I2C_BUS_SUCCESS;
 
     // Send start, address, reg
     i2c->CR2 = (I2C_CR2_START | config.addr |
                (reg_len << I2C_CR2_NBYTES_Pos));
     while (reg_len--) {
-        ret = i2c_wait(i2c, I2C_ISR_TXIS, timeout);
-        if (ret != I2C_BUS_SUCCESS)
-            goto abrt;
+        i2c_wait(i2c, I2C_ISR_TXIS, timeout);
         i2c->TXDR = *reg++;
     }
     i2c_wait(i2c, I2C_ISR_TC, timeout);
@@ -234,13 +217,8 @@ i2c_read(struct i2c_config config, uint8_t reg_len, uint8_t *reg
     i2c->CR2 = (I2C_CR2_START | I2C_CR2_RD_WRN | config.addr |
                (read_len << I2C_CR2_NBYTES_Pos) | I2C_CR2_AUTOEND);
     while (read_len--) {
-        ret = i2c_wait(i2c, I2C_ISR_RXNE, timeout);
-        if (ret != I2C_BUS_SUCCESS)
-            goto abrt;
+        i2c_wait(i2c, I2C_ISR_RXNE, timeout);
         *read++ = i2c->RXDR;
     }
-    return i2c_wait(i2c, I2C_ISR_STOPF, timeout);
-abrt:
-    i2c->CR2 |= I2C_CR2_STOP;
-    return ret;
+    i2c_wait(i2c, I2C_ISR_STOPF, timeout);
 }

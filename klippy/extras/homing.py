@@ -1,6 +1,6 @@
 # Helper code for implementing homing operations
 #
-# Copyright (C) 2016-2024  Kevin O'Connor <kevin@koconnor.net>
+# Copyright (C) 2016-2021  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging, math
@@ -29,17 +29,10 @@ class StepperPosition:
         self.endstop_name = endstop_name
         self.stepper_name = stepper.get_name()
         self.start_pos = stepper.get_mcu_position()
-        self.start_cmd_pos = stepper.mcu_to_commanded_position(self.start_pos)
         self.halt_pos = self.trig_pos = None
     def note_home_end(self, trigger_time):
         self.halt_pos = self.stepper.get_mcu_position()
         self.trig_pos = self.stepper.get_past_mcu_position(trigger_time)
-    def verify_no_probe_skew(self, haltpos):
-        new_start_pos = self.stepper.get_mcu_position(self.start_cmd_pos)
-        if new_start_pos != self.start_pos:
-            logging.warning(
-                "Stepper '%s' position skew after probe: pos %d now %d",
-                self.stepper.get_name(), self.start_pos, new_start_pos)
 
 # Implementation of homing/probing moves
 class HomingMove:
@@ -71,7 +64,9 @@ class HomingMove:
             sname = stepper.get_name()
             kin_spos[sname] += offsets.get(sname, 0) * stepper.get_step_dist()
         thpos = self.toolhead.get_position()
-        return list(kin.calc_position(kin_spos))[:3] + thpos[3:]
+        cpos = kin.calc_position(kin_spos)
+        return [cp if cp is not None else tp
+                for cp, tp in zip(cpos, thpos[:3])] + thpos[3:]
     def homing_move(self, movepos, speed, probe_pos=False,
                     triggered=True, check_triggered=True):
         # Notify start of homing/probing move
@@ -128,9 +123,6 @@ class HomingMove:
             haltpos = trigpos = self.calc_toolhead_pos(kin_spos, trig_steps)
             if trig_steps != halt_steps:
                 haltpos = self.calc_toolhead_pos(kin_spos, halt_steps)
-            self.toolhead.set_position(haltpos)
-            for sp in self.stepper_positions:
-                sp.verify_no_probe_skew(haltpos)
         else:
             haltpos = trigpos = movepos
             over_steps = {sp.stepper_name: sp.halt_pos - sp.trig_pos
@@ -140,7 +132,7 @@ class HomingMove:
                 halt_kin_spos = {s.get_name(): s.get_commanded_position()
                                  for s in kin.get_steppers()}
                 haltpos = self.calc_toolhead_pos(halt_kin_spos, over_steps)
-            self.toolhead.set_position(haltpos)
+        self.toolhead.set_position(haltpos)
         # Signal homing/probing move complete
         try:
             self.printer.send_event("homing:homing_move_end", self)
@@ -232,6 +224,10 @@ class Homing:
                         for s in kin.get_steppers()}
             newpos = kin.calc_position(kin_spos)
             for axis in homing_axes:
+                if newpos[axis] is None:
+                    raise self.printer.command_error(
+                            "Cannot determine position of toolhead on "
+                            "axis %s after homing" % "xyz"[axis])
                 homepos[axis] = newpos[axis]
             self.toolhead.set_position(homepos)
 

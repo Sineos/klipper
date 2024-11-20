@@ -13,17 +13,17 @@ choice
     config MACH_AVR
         bool "Atmega AVR"
     config MACH_ATSAM
-        bool "SAM3/SAM4/SAM E70"
+        bool "SAM3/SAM4/SAM E70 (Due and Duet)"
     config MACH_ATSAMD
         bool "SAMC21/SAMD21/SAMD51/SAME5x"
     config MACH_LPC176X
-        bool "LPC176x"
+        bool "LPC176x (Smoothieboard)"
     config MACH_STM32
         bool "STMicroelectronics STM32"
     config MACH_HC32F460
         bool "Huada Semiconductor HC32F460"
-    config MACH_RPXXXX
-        bool "Raspberry Pi RP2040/RP235x"
+    config MACH_RP2040
+        bool "Raspberry Pi RP2040"
     config MACH_PRU
         bool "Beaglebone PRU"
     config MACH_AR100
@@ -102,7 +102,7 @@ config WANT_SENSORS
     default y
 config WANT_LIS2DW
     bool
-    depends on HAVE_GPIO_SPI || HAVE_GPIO_I2C
+    depends on HAVE_GPIO_SPI
     default y
 config WANT_LDC1612
     bool
@@ -141,8 +141,8 @@ config WANT_SENSORS
     bool "Support external sensor devices"
     depends on HAVE_GPIO_I2C || HAVE_GPIO_SPI
 config WANT_LIS2DW
-    bool "Support lis2dw and lis3dh 3-axis accelerometers"
-    depends on HAVE_GPIO_SPI || HAVE_GPIO_I2C
+    bool "Support lis2dw 3-axis accelerometer"
+    depends on HAVE_GPIO_SPI
 config WANT_LDC1612
     bool "Support ldc1612 eddy current sensor"
     depends on HAVE_GPIO_I2C
@@ -182,6 +182,12 @@ config INITIAL_PINS
         during the micro-controller startup sequence. By default the
         pins will be set to output high - preface a pin with a '!'
         character to set that pin to output low.
+
+config HIGH_PREC_STEP
+    depends on LOW_LEVEL_OPTIONS && \
+        FLASH_SIZE >= 0x8000 && (!MACH_AVR || FLASH_SIZE >= 0x10000)
+    bool "High-precision stepping support (slow)"
+    default n
 
 # The HAVE_x options allow boards to disable support for some commands
 # if the hardware does not support the feature.

@@ -133,6 +133,10 @@ class MCU_trsync:
         if stepper in self._steppers:
             return
         self._steppers.append(stepper)
+    def del_stepper(self, stepper):
+        if stepper not in self._steppers:
+            return
+        self._steppers.remove(stepper)
     def get_steppers(self):
         return list(self._steppers)
     def _build_config(self):
@@ -245,6 +249,7 @@ class TriggerDispatch:
             self._trsyncs.append(trsync)
         trsync.add_stepper(stepper)
         # Check for unsupported multi-mcu shared stepper rails
+        # TODO: figure out this check for generic_cartesian kinematics
         sname = stepper.get_name()
         if sname.startswith('stepper_'):
             for ot in self._trsyncs:
@@ -253,6 +258,10 @@ class TriggerDispatch:
                         cerror = self._mcu.get_printer().config_error
                         raise cerror("Multi-mcu homing not supported on"
                                      " multi-mcu shared axis")
+    def del_stepper(self, stepper):
+        for trsync in self._trsyncs:
+            if trsync.get_mcu() == stepper.get_mcu():
+                trsync.del_stepper(stepper)
     def get_steppers(self):
         return [s for trsync in self._trsyncs for s in trsync.get_steppers()]
     def start(self, print_time):
@@ -299,6 +308,8 @@ class MCU_endstop:
         return self._mcu
     def add_stepper(self, stepper):
         self._dispatch.add_stepper(stepper)
+    def del_stepper(self, stepper):
+        self._dispatch.del_stepper(stepper)
     def get_steppers(self):
         return self._dispatch.get_steppers()
     def _build_config(self):
@@ -832,10 +843,9 @@ class MCU:
         systime = self._reactor.monotonic()
         get_clock = self._clocksync.get_clock
         calc_freq = get_clock(systime + 1) - get_clock(systime)
-        freq_diff = abs(mcu_freq - calc_freq)
         mcu_freq_mhz = int(mcu_freq / 1000000. + 0.5)
         calc_freq_mhz = int(calc_freq / 1000000. + 0.5)
-        if freq_diff > mcu_freq*0.01 and mcu_freq_mhz != calc_freq_mhz:
+        if mcu_freq_mhz != calc_freq_mhz:
             pconfig = self._printer.lookup_object('configfile')
             msg = ("MCU '%s' configured for %dMhz but running at %dMhz!"
                     % (self._name, mcu_freq_mhz, calc_freq_mhz))

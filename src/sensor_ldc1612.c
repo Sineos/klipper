@@ -7,6 +7,7 @@
 
 #include <string.h> // memcpy
 #include "basecmd.h" // oid_alloc
+#include "board/gpio.h" // i2c_read
 #include "board/irq.h" // irq_disable
 #include "board/misc.h" // timer_read_time
 #include "command.h" // DECL_COMMAND
@@ -146,8 +147,7 @@ check_home(struct ldc1612 *ld, uint32_t data)
 static void
 read_reg(struct ldc1612 *ld, uint8_t reg, uint8_t *res)
 {
-    int ret = i2c_dev_read(ld->i2c, sizeof(reg), &reg, 2, res);
-    i2c_shutdown_on_err(ret);
+    i2c_read(ld->i2c->i2c_config, sizeof(reg), &reg, 2, res);
 }
 
 // Read the status register on the ldc1612
