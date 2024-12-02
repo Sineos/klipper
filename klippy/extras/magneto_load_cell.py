@@ -15,7 +15,7 @@ class PrinterLoadCellDigitalOut:
             "digital_out", self.reset_pin)
         if self.load_cell_reset_pin is not None:
             self.load_cell_reset_pin.setup_max_duration(0)
-            self.load_cell_reset_pin.setup_start_value(1, 1, False)
+            self.load_cell_reset_pin.setup_start_value(1, 1)
             self.gcode.respond_info("init magneto load cell")
             self.gcode.respond_info(self.reset_pin)
         else:
