@@ -3,8 +3,8 @@ import time
 
 class PrinterLoadCellDigitalOut:
     def __init__(self, config):
-        self.printer.add_object('magneto_load_cell', self)
         self.printer = config.get_printer()
+        self.printer.add_object('magneto_load_cell', self)
         self.pin_control = self.printer.lookup_object("pins")
         self.reset_pin = config.get("pin")
         self.gcode = self.printer.lookup_object("gcode")
